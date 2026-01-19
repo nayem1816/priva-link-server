@@ -6,6 +6,7 @@ const config = require("../../config/config");
 const AppError = require("../../errors/AppError");
 const { StatusCodes } = require("http-status-codes");
 const { sendSecretViewedEmail } = require("../../helpers/secretNotification.helper");
+const StatsService = require("../Stats/stats.service");
 
 /**
  * Create a new encrypted secret
@@ -41,6 +42,10 @@ const createSecret = async (content, password, expirationHours = 24, viewLimit =
     viewCount: 0,
     notifyEmail: notifyEmail || null,
   });
+
+  // Track stats (don't await to not block response)
+  StatsService.incrementCreated(viewLimit, expirationHours, !!passwordHash)
+    .catch(err => console.error("[Stats] Error tracking creation:", err.message));
 
   // Generate the URL
   const frontendUrl = config.frontend_link || "http://localhost:3000";
@@ -147,6 +152,10 @@ const revealSecret = async (id, password) => {
       viewedAt: new Date(),
     }).catch(err => console.error("[Email] Error:", err.message));
   }
+
+  // Track view stats (don't await)
+  StatsService.incrementViewed()
+    .catch(err => console.error("[Stats] Error tracking view:", err.message));
 
   return {
     content,
