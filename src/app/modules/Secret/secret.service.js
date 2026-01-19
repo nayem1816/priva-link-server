@@ -5,6 +5,7 @@ const { encrypt, decrypt } = require("../../helpers/crypto.helper");
 const config = require("../../config/config");
 const AppError = require("../../errors/AppError");
 const { StatusCodes } = require("http-status-codes");
+const { sendSecretViewedEmail } = require("../../helpers/secretNotification.helper");
 
 /**
  * Create a new encrypted secret
@@ -12,9 +13,10 @@ const { StatusCodes } = require("http-status-codes");
  * @param {string|undefined} password - Optional password for additional security
  * @param {number} expirationHours - Hours until expiration (1, 6, 24, or 168)
  * @param {number} viewLimit - Number of times secret can be viewed (1, 3, 5, or 10)
+ * @param {string|undefined} notifyEmail - Optional email for view notifications
  * @returns {Promise<{id: string, url: string, expiresAt: Date, viewLimit: number}>}
  */
-const createSecret = async (content, password, expirationHours = 24, viewLimit = 1) => {
+const createSecret = async (content, password, expirationHours = 24, viewLimit = 1, notifyEmail = null) => {
   // Encrypt the content
   const { encryptedContent, iv } = encrypt(content);
 
@@ -37,6 +39,7 @@ const createSecret = async (content, password, expirationHours = 24, viewLimit =
     expiresAt,
     viewLimit,
     viewCount: 0,
+    notifyEmail: notifyEmail || null,
   });
 
   // Generate the URL
@@ -134,6 +137,15 @@ const revealSecret = async (id, password) => {
   } else {
     // Update view count
     await Secret.findByIdAndUpdate(id, { viewCount: newViewCount });
+  }
+
+  // Send email notification if configured (don't await to not block response)
+  if (secret.notifyEmail) {
+    sendSecretViewedEmail(secret.notifyEmail, id, {
+      remainingViews: Math.max(0, remainingViews),
+      isLastView,
+      viewedAt: new Date(),
+    }).catch(err => console.error("[Email] Error:", err.message));
   }
 
   return {

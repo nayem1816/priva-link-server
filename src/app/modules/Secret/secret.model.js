@@ -35,6 +35,11 @@ const SecretSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // Optional email for notification when secret is viewed
+    notifyEmail: {
+      type: String,
+      default: null,
+    },
     createdAt: {
       type: Date,
       default: Date.now,

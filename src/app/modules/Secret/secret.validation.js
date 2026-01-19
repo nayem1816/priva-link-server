@@ -27,6 +27,10 @@ const createSecretSchema = z.object({
       })
       .optional()
       .default(1),
+    notifyEmail: z
+      .string()
+      .email("Invalid email address")
+      .optional(),
   }),
 });
 
