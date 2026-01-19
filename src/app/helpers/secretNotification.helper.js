@@ -13,6 +13,10 @@ const config = require("../config/config");
  */
 const sendSecretViewedEmail = async (email, secretId, viewDetails) => {
   try {
+    console.log("[Email] Attempting to send notification to:", email);
+    console.log("[Email] Config user:", config.nodemailer.user ? "SET" : "NOT SET");
+    console.log("[Email] Config pass:", config.nodemailer.password ? "SET" : "NOT SET");
+
     // Skip if no email config
     if (!config.nodemailer.user || !config.nodemailer.password) {
       console.log("[Email] SMTP not configured, skipping notification");
