@@ -8,12 +8,13 @@ const SecretService = require("./secret.service");
  * POST /api/v1/secret
  */
 const createSecret = catchAsync(async (req, res) => {
-  const { content, password, expirationHours } = req.body;
+  const { content, password, expirationHours, viewLimit } = req.body;
 
   const result = await SecretService.createSecret(
     content,
     password,
-    expirationHours
+    expirationHours,
+    viewLimit
   );
 
   sendResponse(res, {

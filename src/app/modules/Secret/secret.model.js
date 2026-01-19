@@ -25,6 +25,16 @@ const SecretSchema = new Schema(
       type: Date,
       required: true,
     },
+    // View limit options
+    viewLimit: {
+      type: Number,
+      enum: [1, 3, 5, 10], // How many times can be viewed
+      default: 1,
+    },
+    viewCount: {
+      type: Number,
+      default: 0,
+    },
     createdAt: {
       type: Date,
       default: Date.now,

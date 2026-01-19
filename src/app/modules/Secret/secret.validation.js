@@ -20,6 +20,13 @@ const createSecretSchema = z.object({
       })
       .optional()
       .default(24),
+    viewLimit: z
+      .number()
+      .refine((val) => [1, 3, 5, 10].includes(val), {
+        message: "View limit must be 1, 3, 5, or 10",
+      })
+      .optional()
+      .default(1),
   }),
 });
 

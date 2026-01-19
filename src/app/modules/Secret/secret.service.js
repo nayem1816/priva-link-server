@@ -11,9 +11,10 @@ const { StatusCodes } = require("http-status-codes");
  * @param {string} content - Plain text content to encrypt
  * @param {string|undefined} password - Optional password for additional security
  * @param {number} expirationHours - Hours until expiration (1, 6, 24, or 168)
- * @returns {Promise<{id: string, url: string, expiresAt: Date}>}
+ * @param {number} viewLimit - Number of times secret can be viewed (1, 3, 5, or 10)
+ * @returns {Promise<{id: string, url: string, expiresAt: Date, viewLimit: number}>}
  */
-const createSecret = async (content, password, expirationHours = 24) => {
+const createSecret = async (content, password, expirationHours = 24, viewLimit = 1) => {
   // Encrypt the content
   const { encryptedContent, iv } = encrypt(content);
 
@@ -34,6 +35,8 @@ const createSecret = async (content, password, expirationHours = 24) => {
     passwordHash,
     expirationHours,
     expiresAt,
+    viewLimit,
+    viewCount: 0,
   });
 
   // Generate the URL
@@ -44,41 +47,47 @@ const createSecret = async (content, password, expirationHours = 24) => {
     id: secret._id.toString(),
     url,
     expiresAt,
+    viewLimit,
   };
 };
 
 /**
  * Check if a secret exists (without fetching content)
  * @param {string} id - Secret ID
- * @returns {Promise<{exists: boolean, hasPassword: boolean, expiresAt: Date|null}>}
+ * @returns {Promise<{exists: boolean, hasPassword: boolean, expiresAt: Date|null, viewLimit: number, viewCount: number, remainingViews: number}>}
  */
 const checkSecretExists = async (id) => {
   // Validate MongoDB ObjectId
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return { exists: false, hasPassword: false, expiresAt: null };
+    return { exists: false, hasPassword: false, expiresAt: null, viewLimit: 0, viewCount: 0, remainingViews: 0 };
   }
 
-  // Find secret, only select passwordHash and expiresAt fields
+  // Find secret, select needed fields
   const secret = await Secret.findById(id)
-    .select("passwordHash expiresAt")
+    .select("passwordHash expiresAt viewLimit viewCount")
     .lean();
 
   if (!secret) {
-    return { exists: false, hasPassword: false, expiresAt: null };
+    return { exists: false, hasPassword: false, expiresAt: null, viewLimit: 0, viewCount: 0, remainingViews: 0 };
   }
+
+  const remainingViews = secret.viewLimit - secret.viewCount;
 
   return {
     exists: true,
     hasPassword: !!secret.passwordHash,
     expiresAt: secret.expiresAt,
+    viewLimit: secret.viewLimit,
+    viewCount: secret.viewCount,
+    remainingViews,
   };
 };
 
 /**
- * Reveal and permanently delete a secret
+ * Reveal a secret. Increments view count and deletes when limit reached.
  * @param {string} id - Secret ID
  * @param {string|undefined} password - Password if secret is protected
- * @returns {Promise<{content: string}>}
+ * @returns {Promise<{content: string, remainingViews: number, isLastView: boolean}>}
  */
 const revealSecret = async (id, password) => {
   // Validate MongoDB ObjectId
@@ -114,10 +123,24 @@ const revealSecret = async (id, password) => {
   // Decrypt the content
   const content = decrypt(secret.encryptedContent, secret.iv);
 
-  // IMMEDIATELY delete the secret from database
-  await Secret.findByIdAndDelete(id);
+  // Increment view count
+  const newViewCount = secret.viewCount + 1;
+  const remainingViews = secret.viewLimit - newViewCount;
+  const isLastView = remainingViews <= 0;
 
-  return { content };
+  if (isLastView) {
+    // This is the last view - delete the secret
+    await Secret.findByIdAndDelete(id);
+  } else {
+    // Update view count
+    await Secret.findByIdAndUpdate(id, { viewCount: newViewCount });
+  }
+
+  return {
+    content,
+    remainingViews: Math.max(0, remainingViews),
+    isLastView,
+  };
 };
 
 module.exports = {
@@ -125,3 +148,4 @@ module.exports = {
   checkSecretExists,
   revealSecret,
 };
+
